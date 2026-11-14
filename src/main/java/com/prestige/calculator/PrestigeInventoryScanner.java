@@ -24,7 +24,7 @@ public final class PrestigeInventoryScanner {
             String cumulativeSpent
     ) {}
 
-    private static final Map<Integer, NavigableMap<Integer, PriceData>> PRICES =
+    private static final NavigableMap<Integer, NavigableMap<Integer, PriceData>> PRICES =
             new TreeMap<>();
 
     private static final List<String> DEBUG_LINES = new ArrayList<>();
@@ -82,7 +82,6 @@ public final class PrestigeInventoryScanner {
 
             readItem(lines);
 
-            // Show useful diagnostic lines instead of repeated item names.
             for (String line : lines) {
                 String lower = line.toLowerCase();
 
@@ -121,21 +120,18 @@ public final class PrestigeInventoryScanner {
         Matcher costMatcher = COST_PATTERN.matcher(text);
         Matcher totalMatcher = TOTAL_PATTERN.matcher(text);
 
-        if (!rebirthMatcher.find() || !prestigeMatcher.find() || !costMatcher.find()) {
+        if (!rebirthMatcher.find()
+                || !prestigeMatcher.find()
+                || !costMatcher.find()) {
             return;
         }
 
         int rebirth = Integer.parseInt(rebirthMatcher.group(1));
         int prestige = Integer.parseInt(prestigeMatcher.group(1));
 
-        String costNumber = rebirthMatcher.group(1) == null
-                ? ""
-                : costMatcher.group(1);
-
+        String costNumber = costMatcher.group(1);
         String costUnit = costMatcher.group(2);
 
-        // UProxy displays the individual cost without a suffix.
-        // In the supplied tooltip format, that cost is in T.
         if (costUnit == null || costUnit.isBlank()) {
             costUnit = "T";
         }
@@ -183,7 +179,6 @@ public final class PrestigeInventoryScanner {
 
     public static PriceData getPrice(int rebirth, int prestige) {
         NavigableMap<Integer, PriceData> prices = PRICES.get(rebirth);
-
         return prices == null ? null : prices.get(prestige);
     }
 
