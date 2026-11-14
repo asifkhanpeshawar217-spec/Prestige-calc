@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "prestige_calculator",
+  "version": "${version}",
+  "name": "Prestige Calculator",
+  "description": "A client-side calculator for tracking prestige costs and progress.",
+  "authors": ["You"],
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.prestige.calculator.PrestigeCalculatorClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.18.0",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
