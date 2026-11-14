@@ -70,6 +70,11 @@ public final class CalculatorScreen extends Screen {
         ).dimensions(left + 16, top + PANEL_HEIGHT - 34, 90, 20).build());
 
         this.addDrawableChild(ButtonWidget.builder(
+                Text.literal("Discovery"),
+                button -> this.client.setScreen(new DiscoveryScreen())
+        ).dimensions(left + 120, top + PANEL_HEIGHT - 34, 100, 20).build());
+
+        this.addDrawableChild(ButtonWidget.builder(
                 Text.literal("Close"),
                 button -> this.close()
         ).dimensions(left + PANEL_WIDTH - 106, top + PANEL_HEIGHT - 34, 90, 20).build());
@@ -101,7 +106,6 @@ public final class CalculatorScreen extends Screen {
             BigDecimal total = BigDecimal.ZERO;
             int missing = 0;
 
-            // Upgrading from prestige 57 to 60 means buying 58, 59 and 60.
             for (int level = start + 1; level <= target; level++) {
                 PrestigeInventoryScanner.PriceData data =
                         PrestigeInventoryScanner.getPrice(rebirth, level);
@@ -155,7 +159,6 @@ public final class CalculatorScreen extends Screen {
 
             String unit = matcher.group(2).toLowerCase();
 
-            // All values are converted to T before adding.
             return switch (unit) {
                 case "t" -> amount;
                 case "q" -> amount.multiply(BigDecimal.valueOf(1_000));
@@ -219,7 +222,7 @@ public final class CalculatorScreen extends Screen {
 
         context.drawTextWithShadow(
                 this.textRenderer,
-                Text.literal("Scanner: " + PrestigeInventoryScanner.getStatus()),
+                Text.literal("Discovered prestiges: " + PrestigeDiscoveryScanner.getDiscoveredPrestigeCount()),
                 left + 16, top + 57, 0xFFB8C7E0
         );
 

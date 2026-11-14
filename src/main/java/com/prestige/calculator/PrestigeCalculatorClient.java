@@ -35,12 +35,13 @@ public class PrestigeCalculatorClient implements ClientModInitializer {
                 }
             }
 
-            // Scan open inventory menus every 10 ticks.
             scanTicks++;
 
             if (scanTicks >= 10) {
                 scanTicks = 0;
-                PrestigeInventoryScanner.scan();
+
+                // Stage 1 ONLY: discover prestige entries.
+                PrestigeDiscoveryScanner.scan();
             }
         });
     }
