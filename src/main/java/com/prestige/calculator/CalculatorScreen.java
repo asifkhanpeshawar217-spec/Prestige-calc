@@ -7,6 +7,7 @@ import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.text.Text;
 
 public final class CalculatorScreen extends Screen {
+
     private static final int PANEL_WIDTH = 300;
     private static final int PANEL_HEIGHT = 220;
 
@@ -30,12 +31,19 @@ public final class CalculatorScreen extends Screen {
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        this.renderBackground(context, mouseX, mouseY, delta);
+
+        // Dark background overlay (no blur)
+        context.fill(0, 0, this.width, this.height, 0x90000000);
 
         int left = (this.width - PANEL_WIDTH) / 2;
         int top = (this.height - PANEL_HEIGHT) / 2;
 
-        context.fill(left, top, left + PANEL_WIDTH, top + PANEL_HEIGHT, 0xEE171B25);
+        // Main panel
+        context.fill(
+                left, top,
+                left + PANEL_WIDTH, top + PANEL_HEIGHT,
+                0xEE171B25
+        );
 
         // Panel border
         context.fill(left, top, left + PANEL_WIDTH, top + 1, 0xFF65718A);
@@ -43,6 +51,7 @@ public final class CalculatorScreen extends Screen {
         context.fill(left, top, left + 1, top + PANEL_HEIGHT, 0xFF65718A);
         context.fill(left + PANEL_WIDTH - 1, top, left + PANEL_WIDTH, top + PANEL_HEIGHT, 0xFF65718A);
 
+        // Title
         context.drawCenteredTextWithShadow(
                 this.textRenderer,
                 this.title,
