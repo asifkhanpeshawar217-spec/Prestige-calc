@@ -11,6 +11,7 @@ import org.lwjgl.glfw.GLFW;
 public class PrestigeCalculatorClient implements ClientModInitializer {
 
     private static KeyBinding openCalculatorKey;
+    private static int scanTicks = 0;
 
     @Override
     public void onInitializeClient() {
@@ -25,13 +26,21 @@ public class PrestigeCalculatorClient implements ClientModInitializer {
         );
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            while (openCalculatorKey.wasPressed()) {
 
+            while (openCalculatorKey.wasPressed()) {
                 if (client.currentScreen == null) {
                     client.setScreen(new CalculatorScreen());
                 } else if (client.currentScreen instanceof CalculatorScreen) {
                     client.setScreen(null);
                 }
+            }
+
+            // Scan open inventory menus every 10 ticks.
+            scanTicks++;
+
+            if (scanTicks >= 10) {
+                scanTicks = 0;
+                PrestigeInventoryScanner.scan();
             }
         });
     }

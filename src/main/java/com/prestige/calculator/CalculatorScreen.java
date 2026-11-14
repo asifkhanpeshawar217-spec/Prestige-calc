@@ -32,26 +32,18 @@ public final class CalculatorScreen extends Screen {
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
 
-        // Dark background overlay (no blur)
         context.fill(0, 0, this.width, this.height, 0x90000000);
 
         int left = (this.width - PANEL_WIDTH) / 2;
         int top = (this.height - PANEL_HEIGHT) / 2;
 
-        // Main panel
-        context.fill(
-                left, top,
-                left + PANEL_WIDTH, top + PANEL_HEIGHT,
-                0xEE171B25
-        );
+        context.fill(left, top, left + PANEL_WIDTH, top + PANEL_HEIGHT, 0xEE171B25);
 
-        // Panel border
         context.fill(left, top, left + PANEL_WIDTH, top + 1, 0xFF65718A);
         context.fill(left, top + PANEL_HEIGHT - 1, left + PANEL_WIDTH, top + PANEL_HEIGHT, 0xFF65718A);
         context.fill(left, top, left + 1, top + PANEL_HEIGHT, 0xFF65718A);
         context.fill(left + PANEL_WIDTH - 1, top, left + PANEL_WIDTH, top + PANEL_HEIGHT, 0xFF65718A);
 
-        // Title
         context.drawCenteredTextWithShadow(
                 this.textRenderer,
                 this.title,
@@ -62,7 +54,7 @@ public final class CalculatorScreen extends Screen {
 
         context.drawTextWithShadow(
                 this.textRenderer,
-                Text.literal("Prestige data detection is being set up."),
+                Text.literal("Automatic inventory price detection"),
                 left + 16,
                 top + 48,
                 0xFFD8DEE9
@@ -70,34 +62,26 @@ public final class CalculatorScreen extends Screen {
 
         context.drawTextWithShadow(
                 this.textRenderer,
-                Text.literal("Current prestige: Not detected"),
+                Text.literal("Prices collected: " + PrestigeInventoryScanner.getPricesCollected()),
                 left + 16,
-                top + 76,
+                top + 85,
                 0xFFFFFFFF
         );
 
         context.drawTextWithShadow(
                 this.textRenderer,
-                Text.literal("Current rebirth: Not detected"),
+                Text.literal("Open /prestige to scan its items."),
                 left + 16,
-                top + 96,
-                0xFFFFFFFF
+                top + 108,
+                0xFFD8DEE9
         );
 
         context.drawTextWithShadow(
                 this.textRenderer,
-                Text.literal("Target prestige: Configure next"),
-                left + 16,
-                top + 116,
-                0xFFFFFFFF
-        );
-
-        context.drawTextWithShadow(
-                this.textRenderer,
-                Text.literal("Known prices: 0"),
+                Text.literal("Price totals: Not available yet"),
                 left + 16,
                 top + 136,
-                0xFFFFFFFF
+                0xFFFFD479
         );
 
         super.render(context, mouseX, mouseY, delta);
