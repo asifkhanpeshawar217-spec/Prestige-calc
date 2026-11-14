@@ -1,3 +1,4 @@
+
 package com.prestige.calculator;
 
 import net.minecraft.client.gui.DrawContext;
@@ -30,29 +31,65 @@ public final class CalculatorScreen extends Screen {
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         this.renderBackground(context, mouseX, mouseY, delta);
+
         int left = (this.width - PANEL_WIDTH) / 2;
         int top = (this.height - PANEL_HEIGHT) / 2;
 
         context.fill(left, top, left + PANEL_WIDTH, top + PANEL_HEIGHT, 0xEE171B25);
-        context.drawBorder(left, top, PANEL_WIDTH, PANEL_HEIGHT, 0xFF65718A);
-        context.drawCenteredTextWithShadow(this.textRenderer, this.title,
-                this.width / 2, top + 12, 0xFFFFFFFF);
 
-        context.drawTextWithShadow(this.textRenderer,
+        // Panel border
+        context.fill(left, top, left + PANEL_WIDTH, top + 1, 0xFF65718A);
+        context.fill(left, top + PANEL_HEIGHT - 1, left + PANEL_WIDTH, top + PANEL_HEIGHT, 0xFF65718A);
+        context.fill(left, top, left + 1, top + PANEL_HEIGHT, 0xFF65718A);
+        context.fill(left + PANEL_WIDTH - 1, top, left + PANEL_WIDTH, top + PANEL_HEIGHT, 0xFF65718A);
+
+        context.drawCenteredTextWithShadow(
+                this.textRenderer,
+                this.title,
+                this.width / 2,
+                top + 12,
+                0xFFFFFFFF
+        );
+
+        context.drawTextWithShadow(
+                this.textRenderer,
                 Text.literal("Prestige data detection is being set up."),
-                left + 16, top + 48, 0xFFD8DEE9);
-        context.drawTextWithShadow(this.textRenderer,
+                left + 16,
+                top + 48,
+                0xFFD8DEE9
+        );
+
+        context.drawTextWithShadow(
+                this.textRenderer,
                 Text.literal("Current prestige: Not detected"),
-                left + 16, top + 76, 0xFFFFFFFF);
-        context.drawTextWithShadow(this.textRenderer,
+                left + 16,
+                top + 76,
+                0xFFFFFFFF
+        );
+
+        context.drawTextWithShadow(
+                this.textRenderer,
                 Text.literal("Current rebirth: Not detected"),
-                left + 16, top + 96, 0xFFFFFFFF);
-        context.drawTextWithShadow(this.textRenderer,
+                left + 16,
+                top + 96,
+                0xFFFFFFFF
+        );
+
+        context.drawTextWithShadow(
+                this.textRenderer,
                 Text.literal("Target prestige: Configure next"),
-                left + 16, top + 116, 0xFFFFFFFF);
-        context.drawTextWithShadow(this.textRenderer,
+                left + 16,
+                top + 116,
+                0xFFFFFFFF
+        );
+
+        context.drawTextWithShadow(
+                this.textRenderer,
                 Text.literal("Known prices: 0"),
-                left + 16, top + 136, 0xFFFFFFFF);
+                left + 16,
+                top + 136,
+                0xFFFFFFFF
+        );
 
         super.render(context, mouseX, mouseY, delta);
     }
@@ -72,10 +109,5 @@ public final class CalculatorScreen extends Screen {
         if (this.client != null) {
             this.client.setScreen(null);
         }
-    }
-
-    @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        return super.mouseClicked(mouseX, mouseY, button);
     }
 }

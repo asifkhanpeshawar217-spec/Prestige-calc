@@ -1,3 +1,4 @@
+
 package com.prestige.calculator;
 
 import net.minecraft.client.gui.DrawContext;
@@ -17,6 +18,7 @@ public final class SettingsScreen extends Screen {
     protected void init() {
         int left = (this.width - 260) / 2;
         int top = (this.height - 120) / 2;
+
         this.addDrawableChild(ButtonWidget.builder(Text.literal("Back"), button ->
                 this.client.setScreen(parent)
         ).dimensions(left + 80, top + 75, 100, 20).build());
@@ -25,15 +27,34 @@ public final class SettingsScreen extends Screen {
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         this.renderBackground(context, mouseX, mouseY, delta);
+
         int left = (this.width - 260) / 2;
         int top = (this.height - 120) / 2;
+
         context.fill(left, top, left + 260, top + 120, 0xEE171B25);
-        context.drawBorder(left, top, 260, 120, 0xFF65718A);
-        context.drawCenteredTextWithShadow(this.textRenderer, this.title,
-                this.width / 2, top + 12, 0xFFFFFFFF);
-        context.drawTextWithShadow(this.textRenderer,
+
+        // Panel border
+        context.fill(left, top, left + 260, top + 1, 0xFF65718A);
+        context.fill(left, top + 119, left + 260, top + 120, 0xFF65718A);
+        context.fill(left, top, left + 1, top + 120, 0xFF65718A);
+        context.fill(left + 259, top, left + 260, top + 120, 0xFF65718A);
+
+        context.drawCenteredTextWithShadow(
+                this.textRenderer,
+                this.title,
+                this.width / 2,
+                top + 12,
+                0xFFFFFFFF
+        );
+
+        context.drawTextWithShadow(
+                this.textRenderer,
                 Text.literal("Settings will be added in the next stage."),
-                left + 18, top + 42, 0xFFD8DEE9);
+                left + 18,
+                top + 42,
+                0xFFD8DEE9
+        );
+
         super.render(context, mouseX, mouseY, delta);
     }
 
