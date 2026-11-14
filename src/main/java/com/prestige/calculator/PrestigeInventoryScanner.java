@@ -10,20 +10,36 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class PrestigeInventoryScanner {
 
-    private static final Map<Integer, String> PRICES = new TreeMap<>();
+    public record PriceData(
+            int rebirth,
+            int prestige,
+            String individualCost,
+            String cumulativeSpent
+    ) {}
+
+    private static final Map<Integer, NavigableMap<Integer, PriceData>> PRICES =
+            new TreeMap<>();
+
     private static final List<String> DEBUG_LINES = new ArrayList<>();
+
+    private static final Pattern REBIRTH_PATTERN =
+            Pattern.compile("(?i)rebirth\\s*#?\\s*(\\d+)");
 
     private static final Pattern PRESTIGE_PATTERN =
             Pattern.compile("(?i)prestige\\s*#?\\s*(\\d+)");
 
-    private static final Pattern PRICE_PATTERN =
-            Pattern.compile("(?i)^\\s*price\\s*:\\s*(.+?)\\s*$");
+    private static final Pattern COST_PATTERN =
+            Pattern.compile("(?i)cost\\s*:\\s*\\$\\s*([\\d,.]+)\\s*([a-z]+)?");
+
+    private static final Pattern TOTAL_PATTERN =
+            Pattern.compile("(?i)\\[\\s*([\\d,.]+)\\s*(qt|q|t|b|m|k)\\s*\\]");
 
     private static int scannedItems;
     private static String status = "Waiting for inventory...";
@@ -64,53 +80,93 @@ public final class PrestigeInventoryScanner {
                 lines.add(line.getString());
             }
 
-            if (DEBUG_LINES.size() < 8) {
-                DEBUG_LINES.add("Item: " + stack.getName().getString());
+            readItem(lines);
 
-                for (String line : lines) {
-                    if (DEBUG_LINES.size() >= 8) break;
-                    DEBUG_LINES.add("  " + line);
+            // Show useful diagnostic lines instead of repeated item names.
+            for (String line : lines) {
+                String lower = line.toLowerCase();
+
+                if (lower.contains("rebirth")
+                        || lower.contains("prestige")
+                        || lower.contains("cost:")
+                        || lower.contains("qt")
+                        || lower.contains("already completed")
+                        || lower.contains("complete previous")) {
+
+                    if (DEBUG_LINES.size() < 10 && !DEBUG_LINES.contains(line)) {
+                        DEBUG_LINES.add(line);
+                    }
                 }
             }
-
-            readItem(lines);
         }
 
         status = "Inventory scanned";
     }
 
     private static void readItem(List<String> lines) {
-        int prestigeLevel = -1;
-        String price = null;
-        boolean bulkItem = false;
+        StringBuilder combined = new StringBuilder();
 
         for (String line : lines) {
-            if (line.toLowerCase().contains("bulk prestige")) {
-                bulkItem = true;
-            }
-
-            Matcher prestigeMatcher = PRESTIGE_PATTERN.matcher(line);
-
-            if (prestigeMatcher.find()) {
-                prestigeLevel = Integer.parseInt(prestigeMatcher.group(1));
-            }
-
-            Matcher priceMatcher = PRICE_PATTERN.matcher(line);
-
-            if (priceMatcher.find()) {
-                price = priceMatcher.group(1).trim();
-            }
+            combined.append(line).append(" ");
         }
 
-        if (bulkItem || prestigeLevel < 1 || price == null) {
+        String text = combined.toString();
+
+        if (text.toLowerCase().contains("bulk prestige")) {
             return;
         }
 
-        PRICES.put(prestigeLevel, price);
+        Matcher rebirthMatcher = REBIRTH_PATTERN.matcher(text);
+        Matcher prestigeMatcher = PRESTIGE_PATTERN.matcher(text);
+        Matcher costMatcher = COST_PATTERN.matcher(text);
+        Matcher totalMatcher = TOTAL_PATTERN.matcher(text);
+
+        if (!rebirthMatcher.find() || !prestigeMatcher.find() || !costMatcher.find()) {
+            return;
+        }
+
+        int rebirth = Integer.parseInt(rebirthMatcher.group(1));
+        int prestige = Integer.parseInt(prestigeMatcher.group(1));
+
+        String costNumber = rebirthMatcher.group(1) == null
+                ? ""
+                : costMatcher.group(1);
+
+        String costUnit = costMatcher.group(2);
+
+        // UProxy displays the individual cost without a suffix.
+        // In the supplied tooltip format, that cost is in T.
+        if (costUnit == null || costUnit.isBlank()) {
+            costUnit = "T";
+        }
+
+        String individualCost = "$" + costNumber + costUnit;
+
+        String cumulativeSpent = null;
+
+        if (totalMatcher.find()) {
+            cumulativeSpent = totalMatcher.group(1) + totalMatcher.group(2);
+        }
+
+        PriceData data = new PriceData(
+                rebirth,
+                prestige,
+                individualCost,
+                cumulativeSpent
+        );
+
+        PRICES.computeIfAbsent(rebirth, ignored -> new TreeMap<>())
+                .put(prestige, data);
     }
 
     public static int getPricesCollected() {
-        return PRICES.size();
+        int count = 0;
+
+        for (NavigableMap<Integer, PriceData> prices : PRICES.values()) {
+            count += prices.size();
+        }
+
+        return count;
     }
 
     public static int getScannedItems() {
@@ -125,27 +181,56 @@ public final class PrestigeInventoryScanner {
         return Collections.unmodifiableList(DEBUG_LINES);
     }
 
-    public static String getPrice(int prestigeLevel) {
-        return PRICES.get(prestigeLevel);
+    public static PriceData getPrice(int rebirth, int prestige) {
+        NavigableMap<Integer, PriceData> prices = PRICES.get(rebirth);
+
+        return prices == null ? null : prices.get(prestige);
     }
 
-    public static int getMissingPrices(int start, int end) {
-        if (start > end) return 0;
+    public static String getPrice(int prestige) {
+        for (NavigableMap<Integer, PriceData> prices : PRICES.descendingMap().values()) {
+            PriceData data = prices.get(prestige);
+
+            if (data != null) {
+                return data.individualCost();
+            }
+        }
+
+        return null;
+    }
+
+    public static int getMissingPrices(int rebirth, int start, int end) {
+        if (start > end) {
+            return 0;
+        }
 
         int missing = 0;
+        NavigableMap<Integer, PriceData> prices = PRICES.get(rebirth);
 
         for (int level = start; level <= end; level++) {
-            if (!PRICES.containsKey(level)) missing++;
+            if (prices == null || !prices.containsKey(level)) {
+                missing++;
+            }
         }
 
         return missing;
     }
 
-    public static Map<Integer, String> getCollectedPrices() {
+    public static int getMissingPrices(int start, int end) {
+        if (PRICES.isEmpty()) {
+            return Math.max(0, end - start + 1);
+        }
+
+        return getMissingPrices(PRICES.lastKey(), start, end);
+    }
+
+    public static Map<Integer, NavigableMap<Integer, PriceData>> getAllPrices() {
         return Collections.unmodifiableMap(PRICES);
     }
 
     public static void clearPrices() {
         PRICES.clear();
+        DEBUG_LINES.clear();
+        scannedItems = 0;
     }
 }
