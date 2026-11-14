@@ -8,8 +8,8 @@ import net.minecraft.text.Text;
 
 public final class CalculatorScreen extends Screen {
 
-    private static final int PANEL_WIDTH = 300;
-    private static final int PANEL_HEIGHT = 220;
+    private static final int PANEL_WIDTH = 340;
+    private static final int PANEL_HEIGHT = 300;
 
     public CalculatorScreen() {
         super(Text.literal("Prestige Calculator"));
@@ -45,44 +45,46 @@ public final class CalculatorScreen extends Screen {
         context.fill(left + PANEL_WIDTH - 1, top, left + PANEL_WIDTH, top + PANEL_HEIGHT, 0xFF65718A);
 
         context.drawCenteredTextWithShadow(
-                this.textRenderer,
-                this.title,
-                this.width / 2,
-                top + 12,
-                0xFFFFFFFF
+                this.textRenderer, this.title,
+                this.width / 2, top + 12, 0xFFFFFFFF
         );
 
         context.drawTextWithShadow(
                 this.textRenderer,
-                Text.literal("Automatic inventory price detection"),
-                left + 16,
-                top + 48,
-                0xFFD8DEE9
+                Text.literal("Scanner: " + PrestigeInventoryScanner.getStatus()),
+                left + 16, top + 42, 0xFFD8DEE9
+        );
+
+        context.drawTextWithShadow(
+                this.textRenderer,
+                Text.literal("Items detected: " + PrestigeInventoryScanner.getScannedItems()),
+                left + 16, top + 60, 0xFFFFFFFF
         );
 
         context.drawTextWithShadow(
                 this.textRenderer,
                 Text.literal("Prices collected: " + PrestigeInventoryScanner.getPricesCollected()),
-                left + 16,
-                top + 85,
-                0xFFFFFFFF
+                left + 16, top + 78, 0xFFFFFFFF
         );
 
         context.drawTextWithShadow(
                 this.textRenderer,
-                Text.literal("Open /prestige to scan its items."),
-                left + 16,
-                top + 108,
-                0xFFD8DEE9
+                Text.literal("Debug information:"),
+                left + 16, top + 105, 0xFFFFD479
         );
 
-        context.drawTextWithShadow(
-                this.textRenderer,
-                Text.literal("Price totals: Not available yet"),
-                left + 16,
-                top + 136,
-                0xFFFFD479
-        );
+        int y = top + 123;
+
+        for (String line : PrestigeInventoryScanner.getDebugLines()) {
+            context.drawTextWithShadow(
+                    this.textRenderer,
+                    Text.literal(line),
+                    left + 16, y, 0xFFD8DEE9
+            );
+
+            y += 15;
+            if (y > top + PANEL_HEIGHT - 48) break;
+        }
 
         super.render(context, mouseX, mouseY, delta);
     }

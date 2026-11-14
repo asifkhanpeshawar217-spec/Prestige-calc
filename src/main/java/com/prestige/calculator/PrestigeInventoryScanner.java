@@ -17,12 +17,16 @@ import java.util.regex.Pattern;
 public final class PrestigeInventoryScanner {
 
     private static final Map<Integer, String> PRICES = new TreeMap<>();
+    private static final List<String> DEBUG_LINES = new ArrayList<>();
 
     private static final Pattern PRESTIGE_PATTERN =
             Pattern.compile("(?i)prestige\\s*#?\\s*(\\d+)");
 
     private static final Pattern PRICE_PATTERN =
             Pattern.compile("(?i)^\\s*price\\s*:\\s*(.+?)\\s*$");
+
+    private static int scannedItems;
+    private static String status = "Waiting for inventory...";
 
     private PrestigeInventoryScanner() {
     }
@@ -38,12 +42,18 @@ public final class PrestigeInventoryScanner {
             return;
         }
 
+        scannedItems = 0;
+        DEBUG_LINES.clear();
+        status = "Inventory detected";
+
         for (var slot : client.player.currentScreenHandler.slots) {
             ItemStack stack = slot.getStack();
 
             if (stack == null || stack.isEmpty()) {
                 continue;
             }
+
+            scannedItems++;
 
             List<Text> tooltip = TooltipReader.getTooltipLines(stack);
             List<String> lines = new ArrayList<>();
@@ -54,8 +64,19 @@ public final class PrestigeInventoryScanner {
                 lines.add(line.getString());
             }
 
+            if (DEBUG_LINES.size() < 8) {
+                DEBUG_LINES.add("Item: " + stack.getName().getString());
+
+                for (String line : lines) {
+                    if (DEBUG_LINES.size() >= 8) break;
+                    DEBUG_LINES.add("  " + line);
+                }
+            }
+
             readItem(lines);
         }
+
+        status = "Inventory scanned";
     }
 
     private static void readItem(List<String> lines) {
@@ -81,7 +102,6 @@ public final class PrestigeInventoryScanner {
             }
         }
 
-        // Bulk prices must not be mistaken for individual prices.
         if (bulkItem || prestigeLevel < 1 || price == null) {
             return;
         }
@@ -93,21 +113,29 @@ public final class PrestigeInventoryScanner {
         return PRICES.size();
     }
 
+    public static int getScannedItems() {
+        return scannedItems;
+    }
+
+    public static String getStatus() {
+        return status;
+    }
+
+    public static List<String> getDebugLines() {
+        return Collections.unmodifiableList(DEBUG_LINES);
+    }
+
     public static String getPrice(int prestigeLevel) {
         return PRICES.get(prestigeLevel);
     }
 
     public static int getMissingPrices(int start, int end) {
-        if (start > end) {
-            return 0;
-        }
+        if (start > end) return 0;
 
         int missing = 0;
 
         for (int level = start; level <= end; level++) {
-            if (!PRICES.containsKey(level)) {
-                missing++;
-            }
+            if (!PRICES.containsKey(level)) missing++;
         }
 
         return missing;
