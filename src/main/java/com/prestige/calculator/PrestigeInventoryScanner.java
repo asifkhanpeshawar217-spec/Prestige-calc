@@ -7,6 +7,7 @@ import com.google.gson.JsonParser;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.text.Text;
@@ -239,6 +240,22 @@ public final class PrestigeInventoryScanner {
 
             audit.append("[PRICE] RB").append(rebirth).append(" P").append(prestige)
                     .append(" = ").append(individualCost).append('\n');
+        }
+
+        // The Next arrow's label is a hover-only tooltip in this menu.
+        // If it is not present in the normal item tooltip, use the rightmost
+        // vanilla arrow in the menu as the Next control (the left arrow is Previous).
+        if (nextSlot == null) {
+            for (int i = snapshot.size() - 1; i >= 0; i--) {
+                SlotSnapshot entry = snapshot.get(i);
+                ItemStack stack = entry.slot().getStack();
+                if (!stack.isEmpty() && stack.isOf(Items.ARROW)) {
+                    nextSlot = entry.slot();
+                    audit.append("[NEXT CONTROL FALLBACK] rightmost arrow slot ")
+                            .append(nextSlot.id).append('\\n');
+                    break;
+                }
+            }
         }
 
         previousPageFingerprint = fingerprint;
