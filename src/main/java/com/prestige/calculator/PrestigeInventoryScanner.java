@@ -199,7 +199,7 @@ public final class PrestigeInventoryScanner {
         activePageSnapshot = snapshot.stream()
                 .filter(entry -> isGlassItem(entry.slot().getStack()))
                 .toList();
-        hoveredPageEntries.clear();
+        scannedGlassEntries.clear();
         activePageFingerprint = fingerprint;
         status = "Page " + pagesScanned + ": scanning " + activePageSnapshot.size() + " glass slots...";
         state = ScanState.SCANNING_PAGE;
@@ -210,7 +210,7 @@ public final class PrestigeInventoryScanner {
      * It never moves or simulates the mouse cursor.
      */
     private static void advanceDirectScan(MinecraftClient client, net.minecraft.screen.ScreenHandler handler) {
-        hoveredPageEntries.clear();
+        scannedGlassEntries.clear();
         scannedItems = 0;
         for (SlotSnapshot original : activePageSnapshot) {
             Slot slot = original.slot();
@@ -218,7 +218,7 @@ public final class PrestigeInventoryScanner {
             if (stack == null || stack.isEmpty()) continue;
             String name = stack.getName().getString();
             List<String> lines = getLines(stack);
-            hoveredPageEntries.add(new SlotSnapshot(slot, name, List.copyOf(lines)));
+            scannedGlassEntries.add(new SlotSnapshot(slot, name, List.copyOf(lines)));
             scannedItems++;
         }
         status = "Page " + pagesScanned + ": read " + scannedItems + " glass slots without moving the cursor.";
@@ -232,7 +232,7 @@ public final class PrestigeInventoryScanner {
         audit.append("\n========== PRICE PAGE ").append(pagesScanned)
                 .append(" | RB CONTEXT ").append(currentRebirth).append(" | DIRECT ITEM DATA ==========").append('\n');
 
-        for (SlotSnapshot entry : hoveredPageEntries) {
+        for (SlotSnapshot entry : scannedGlassEntries) {
             if (entry.lines().isEmpty()) continue;
 
             if (hasNextTooltip(entry.lines())) {
@@ -487,8 +487,7 @@ public final class PrestigeInventoryScanner {
         SLOT_CACHE.clear();
         activePageSnapshot = List.of();
         activePageAllSlots = List.of();
-        hoveredPageEntries.clear();
-        activeSlotIndex = 0;
+        scannedGlassEntries.clear();
     }
 
     public static int getPricesCollected() {
