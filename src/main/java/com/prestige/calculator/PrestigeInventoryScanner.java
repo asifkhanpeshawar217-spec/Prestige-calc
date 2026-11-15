@@ -80,11 +80,9 @@ public final class PrestigeInventoryScanner {
     private static long saveGeneration;
 
     // Hover scanning deliberately advances one visible slot at a time.
-    private static final int MAX_SLOT_RETRIES = 4;
     private static List<SlotSnapshot> activePageSnapshot = List.of();
     private static List<SlotSnapshot> activePageAllSlots = List.of();
-    private static final List<SlotSnapshot> hoveredPageEntries = new ArrayList<>();
-    private static int activeSlotIndex;
+    private static final List<SlotSnapshot> scannedGlassEntries = new ArrayList<>();
     private static String activePageFingerprint = "";
 
     private PrestigeInventoryScanner() {}
@@ -202,7 +200,6 @@ public final class PrestigeInventoryScanner {
                 .filter(entry -> isGlassItem(entry.slot().getStack()))
                 .toList();
         hoveredPageEntries.clear();
-        activeSlotIndex = 0;
         activePageFingerprint = fingerprint;
         status = "Page " + pagesScanned + ": scanning " + activePageSnapshot.size() + " glass slots...";
         state = ScanState.SCANNING_PAGE;
@@ -223,23 +220,9 @@ public final class PrestigeInventoryScanner {
             List<String> lines = getLines(stack);
             hoveredPageEntries.add(new SlotSnapshot(slot, name, List.copyOf(lines)));
             scannedItems++;
-            if (isIncompleteEntry(name, lines)) missingCostItemsThisPage++;
         }
         status = "Page " + pagesScanned + ": read " + scannedItems + " glass slots without moving the cursor.";
         finishDirectPage(client, handler);
-    }
-
-    private static boolean isIncompleteEntry(String name, List<String> lines) {
-        String lowerName = name.toLowerCase(Locale.ROOT);
-        String joined = String.join(" | ", lines);
-        if (lowerName.contains("prestige")) {
-            return !PRESTIGE_PATTERN.matcher(joined).find()
-                    || !COST_PATTERN.matcher(joined).find();
-        }
-        if (lowerName.contains("rebirth")) {
-            return !REBIRTH_PATTERN.matcher(joined).find();
-        }
-        return false;
     }
 
     private static void finishDirectPage(MinecraftClient client, net.minecraft.screen.ScreenHandler handler) {
@@ -273,7 +256,7 @@ public final class PrestigeInventoryScanner {
             Matcher costMatcher = COST_PATTERN.matcher(joined);
             if (!costMatcher.find()) {
                 missingCostItemsThisPage++;
-                audit.append("[MISSING COST AFTER RETRIES] RB").append(rebirth).append(" P").append(prestige)
+                audit.append("[MISSING COST] RB").append(rebirth).append(" P").append(prestige)
                         .append(" | ").append(entry.name()).append('\n');
                 continue;
             }
