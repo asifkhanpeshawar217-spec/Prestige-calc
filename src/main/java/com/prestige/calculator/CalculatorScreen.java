@@ -70,7 +70,7 @@ public final class CalculatorScreen extends Screen {
         ).dimensions(left + 16, top + PANEL_HEIGHT - 34, 90, 20).build());
 
         this.addDrawableChild(ButtonWidget.builder(
-                Text.literal("Discovery"),
+                Text.literal("Price Scan"),
                 button -> this.client.setScreen(new DiscoveryScreen())
         ).dimensions(left + 120, top + PANEL_HEIGHT - 34, 100, 20).build());
 
@@ -222,7 +222,7 @@ public final class CalculatorScreen extends Screen {
 
         context.drawTextWithShadow(
                 this.textRenderer,
-                Text.literal("Discovered prestiges: " + PrestigeDiscoveryScanner.getDiscoveredPrestigeCount()),
+                Text.literal("Scanner: " + PrestigeInventoryScanner.getStatus()),
                 left + 16, top + 57, 0xFFB8C7E0
         );
 
