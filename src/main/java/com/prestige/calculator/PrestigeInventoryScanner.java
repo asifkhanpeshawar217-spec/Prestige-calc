@@ -330,15 +330,15 @@ public final class PrestigeInventoryScanner {
         Slot nextSlot = null;
         List<PriceData> pagePrices = new ArrayList<>();
         StringBuilder audit = new StringBuilder();
-        audit.append("\\n========== PRICE PAGE ").append(pagesScanned)
-                .append(" | RB CONTEXT ").append(currentRebirth).append(" | HOVER VERIFIED ==========").append('\\n');
+        audit.append("\n========== PRICE PAGE ").append(pagesScanned)
+                .append(" | RB CONTEXT ").append(currentRebirth).append(" | HOVER VERIFIED ==========").append('\n');
 
         for (SlotSnapshot entry : hoveredPageEntries) {
             if (entry.lines().isEmpty()) continue;
 
             if (hasNextTooltip(entry.lines())) {
                 nextSlot = entry.slot();
-                audit.append("[NEXT CONTROL] slot ").append(nextSlot.id).append('\\n');
+                audit.append("[NEXT CONTROL] slot ").append(nextSlot.id).append('\n');
             }
 
             String joined = String.join(" | ", entry.lines());
@@ -347,7 +347,7 @@ public final class PrestigeInventoryScanner {
 
             if (rebirthInItem != null && prestige == null) {
                 currentRebirth = rebirthInItem;
-                audit.append("[REBIRTH] RB").append(currentRebirth).append('\\n');
+                audit.append("[REBIRTH] RB").append(currentRebirth).append('\n');
                 continue;
             }
 
@@ -358,7 +358,7 @@ public final class PrestigeInventoryScanner {
             if (!costMatcher.find()) {
                 missingCostItemsThisPage++;
                 audit.append("[MISSING COST AFTER RETRIES] RB").append(rebirth).append(" P").append(prestige)
-                        .append(" | ").append(entry.name()).append('\\n');
+                        .append(" | ").append(entry.name()).append('\n');
                 continue;
             }
 
@@ -381,7 +381,7 @@ public final class PrestigeInventoryScanner {
             audit.append("[PRICE] RB").append(rebirth).append(" P").append(prestige)
                     .append(" = ").append(individualCost);
             if (cumulative != null) audit.append(" | TOTAL ").append(cumulative);
-            audit.append('\\n');
+            audit.append('\n');
         }
 
         // If the tooltip label was not in the normal item tooltip, use the rightmost
@@ -393,7 +393,7 @@ public final class PrestigeInventoryScanner {
                 if (stack != null && !stack.isEmpty() && stack.isOf(Items.ARROW)) {
                     nextSlot = entry.slot();
                     audit.append("[NEXT CONTROL CANDIDATE] rightmost arrow slot ")
-                            .append(nextSlot.id).append('\\n');
+                            .append(nextSlot.id).append('\n');
                     break;
                 }
             }
