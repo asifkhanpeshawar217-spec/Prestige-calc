@@ -1,0 +1,11 @@
+{
+  "required": true,
+  "package": "com.prestige.calculator",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "HandledScreenAccessor"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
