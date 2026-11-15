@@ -506,12 +506,6 @@ public final class PrestigeInventoryScanner {
         activePageAllSlots = List.of();
         hoveredPageEntries.clear();
         activeSlotIndex = 0;
-        hoverWaitTicks = 0;
-        slotRetryCount = 0;
-        cursorMovedForSlot = false;
-        nextHoverPhase = false;
-        cursorMovedForNext = false;
-        pendingNextSlot = null;
     }
 
     public static int getPricesCollected() {
