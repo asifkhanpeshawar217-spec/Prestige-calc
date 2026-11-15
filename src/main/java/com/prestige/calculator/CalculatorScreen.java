@@ -82,10 +82,12 @@ public final class CalculatorScreen extends Screen {
 
             BigDecimal knownTotal = BigDecimal.ZERO;
             List<Integer> missingLevels = new ArrayList<>();
+            int requestedPaidLevels = 0;
 
             for (int level = start + 1; level <= target; level++) {
                 // Prestige 1 is always free and is intentionally not in the price file.
                 if (level == 1) continue;
+                requestedPaidLevels++;
 
                 BigDecimal price = PriceCatalogue.getPrice(rebirth, level);
                 if (price == null) {
@@ -97,7 +99,7 @@ public final class CalculatorScreen extends Screen {
 
             if (missingLevels.isEmpty()) {
                 result = "Total cost: " + formatAmount(knownTotal);
-                detail = "All " + (target - start) + " requested prestige levels are covered.";
+                detail = "All " + requestedPaidLevels + " paid prestige levels are covered.";
             } else {
                 result = "Known subtotal: " + formatAmount(knownTotal);
                 StringBuilder missing = new StringBuilder("Missing ");
