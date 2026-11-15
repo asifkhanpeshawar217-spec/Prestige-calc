@@ -11,6 +11,7 @@ import net.minecraft.item.Items;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.text.Text;
+import org.lwjgl.glfw.GLFW;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -80,6 +81,20 @@ public final class PrestigeInventoryScanner {
     private static String candidateFingerprint = "";
     private static long saveGeneration;
 
+    // Hover scanning deliberately advances one visible slot at a time.
+    private static final int HOVER_WAIT_TICKS = 8;
+    private static final int MAX_SLOT_RETRIES = 4;
+    private static List<SlotSnapshot> activePageSnapshot = List.of();
+    private static final List<SlotSnapshot> hoveredPageEntries = new ArrayList<>();
+    private static int activeSlotIndex;
+    private static int hoverWaitTicks;
+    private static int slotRetryCount;
+    private static boolean cursorMovedForSlot;
+    private static boolean nextHoverPhase;
+    private static boolean cursorMovedForNext;
+    private static Slot pendingNextSlot;
+    private static String activePageFingerprint = "";
+
     private PrestigeInventoryScanner() {}
 
     public static void scan() {
@@ -109,6 +124,11 @@ public final class PrestigeInventoryScanner {
         }
 
         if (state == ScanState.FINISHED) return;
+
+        if (state == ScanState.SCANNING_PAGE) {
+            advanceHoverScan(client, handler);
+            return;
+        }
 
         String fingerprint = fingerprint(snapshot);
 
@@ -185,20 +205,140 @@ public final class PrestigeInventoryScanner {
         scannedItems = 0;
         pricesAddedThisPage = 0;
         missingCostItemsThisPage = 0;
+        activePageSnapshot = new ArrayList<>(snapshot);
+        hoveredPageEntries.clear();
+        activeSlotIndex = 0;
+        hoverWaitTicks = 0;
+        slotRetryCount = 0;
+        cursorMovedForSlot = false;
+        nextHoverPhase = false;
+        cursorMovedForNext = false;
+        pendingNextSlot = null;
+        activePageFingerprint = fingerprint;
+        status = "Page " + pagesScanned + ": moving the mouse over each entry...";
+        state = ScanState.SCANNING_PAGE;
+    }
+
+    private static void advanceHoverScan(MinecraftClient client, net.minecraft.screen.ScreenHandler handler) {
+        if (nextHoverPhase) {
+            advanceNextButtonHover(client, handler);
+            return;
+        }
+
+        if (activeSlotIndex >= activePageSnapshot.size()) {
+            finishHoveredPage(client, handler);
+            return;
+        }
+
+        SlotSnapshot original = activePageSnapshot.get(activeSlotIndex);
+        Slot slot = original.slot();
+        ItemStack stack = slot.getStack();
+
+        if (stack == null || stack.isEmpty()) {
+            hoveredPageEntries.add(new SlotSnapshot(slot, "", List.of()));
+            activeSlotIndex++;
+            cursorMovedForSlot = false;
+            slotRetryCount = 0;
+            return;
+        }
+
+        if (!cursorMovedForSlot) {
+            moveCursorToSlot(client, slot);
+            cursorMovedForSlot = true;
+            hoverWaitTicks = HOVER_WAIT_TICKS;
+            return;
+        }
+
+        if (hoverWaitTicks > 0) {
+            hoverWaitTicks--;
+            return;
+        }
+
+        // Read the stack tooltip only after the real cursor has rested over this slot.
+        List<String> lines = getLines(stack);
+        String name = stack.getName().getString();
+        if (isIncompleteEntry(name, lines) && slotRetryCount < MAX_SLOT_RETRIES) {
+            slotRetryCount++;
+            cursorMovedForSlot = false;
+            status = "Retrying unreadable entry in slot " + slot.id + " (" + slotRetryCount + "/" + MAX_SLOT_RETRIES + ")...";
+            return;
+        }
+
+        hoveredPageEntries.add(new SlotSnapshot(slot, name, List.copyOf(lines)));
+        scannedItems++;
+        activeSlotIndex++;
+        cursorMovedForSlot = false;
+        slotRetryCount = 0;
+        status = "Page " + pagesScanned + ": checked " + scannedItems + " of " + activePageSnapshot.size() + " slots...";
+    }
+
+    private static boolean isIncompleteEntry(String name, List<String> lines) {
+        String lowerName = name.toLowerCase(Locale.ROOT);
+        String joined = String.join(" | ", lines);
+        if (lowerName.contains("prestige")) {
+            return !PRESTIGE_PATTERN.matcher(joined).find()
+                    || !COST_PATTERN.matcher(joined).find();
+        }
+        if (lowerName.contains("rebirth")) {
+            return !REBIRTH_PATTERN.matcher(joined).find();
+        }
+        return false;
+    }
+
+    private static void moveCursorToSlot(MinecraftClient client, Slot slot) {
+        if (!(client.currentScreen instanceof HandledScreen<?> screen)) return;
+        if (!(screen instanceof HandledScreenAccessor accessor)) return;
+
+        double scale = client.getWindow().getScaleFactor();
+        double guiX = accessor.prestige$getX() + slot.x + 8.0;
+        double guiY = accessor.prestige$getY() + slot.y + 8.0;
+        GLFW.glfwSetCursorPos(client.getWindow().getHandle(), guiX * scale, guiY * scale);
+    }
+
+    private static void advanceNextButtonHover(MinecraftClient client, net.minecraft.screen.ScreenHandler handler) {
+        if (pendingNextSlot == null) {
+            state = ScanState.FINISHED;
+            status = "Page scan finished, but no Next control was identified.";
+            return;
+        }
+
+        if (!cursorMovedForNext) {
+            moveCursorToSlot(client, pendingNextSlot);
+            cursorMovedForNext = true;
+            hoverWaitTicks = HOVER_WAIT_TICKS;
+            status = "Page " + pagesScanned + " verified. Hovering over Next...";
+            return;
+        }
+
+        if (hoverWaitTicks > 0) {
+            hoverWaitTicks--;
+            return;
+        }
+
+        // The Next slot has been physically hovered after every catalogue entry.
+        // Use the container click API so Minecraft sends the normal slot action.
+        previousPageFingerprint = activePageFingerprint;
+        state = ScanState.WAITING_FOR_NEXT_PAGE;
+        unchangedPageChecks = 0;
+        status = "Page " + pagesScanned + " scanned. Opening the next page...";
+        client.interactionManager.clickSlot(handler.syncId, pendingNextSlot.id, 0,
+                SlotActionType.PICKUP, client.player);
+        nextHoverPhase = false;
+    }
+
+    private static void finishHoveredPage(MinecraftClient client, net.minecraft.screen.ScreenHandler handler) {
         Slot nextSlot = null;
         List<PriceData> pagePrices = new ArrayList<>();
         StringBuilder audit = new StringBuilder();
-        audit.append("\n========== PRICE PAGE ").append(pagesScanned)
-                .append(" | RB CONTEXT ").append(currentRebirth).append(" ==========\n");
+        audit.append("\\n========== PRICE PAGE ").append(pagesScanned)
+                .append(" | RB CONTEXT ").append(currentRebirth).append(" | HOVER VERIFIED ==========").append('\\n');
 
-        for (SlotSnapshot entry : snapshot) {
-            Slot slot = entry.slot();
+        for (SlotSnapshot entry : hoveredPageEntries) {
             if (entry.lines().isEmpty()) continue;
-            scannedItems++;
 
             if (hasNextTooltip(entry.lines())) {
-                nextSlot = slot;
-                audit.append("[NEXT CONTROL] slot ").append(slot.id).append('\n');
+                nextSlot = entry.slot();
+                audit.append("[NEXT CONTROL] slot ").append(nextSlot.id).append('\\n');
             }
 
             String joined = String.join(" | ", entry.lines());
@@ -207,7 +347,7 @@ public final class PrestigeInventoryScanner {
 
             if (rebirthInItem != null && prestige == null) {
                 currentRebirth = rebirthInItem;
-                audit.append("[REBIRTH] RB").append(currentRebirth).append('\n');
+                audit.append("[REBIRTH] RB").append(currentRebirth).append('\\n');
                 continue;
             }
 
@@ -217,8 +357,8 @@ public final class PrestigeInventoryScanner {
             Matcher costMatcher = COST_PATTERN.matcher(joined);
             if (!costMatcher.find()) {
                 missingCostItemsThisPage++;
-                audit.append("[MISSING COST] RB").append(rebirth).append(" P").append(prestige)
-                        .append(" | ").append(entry.name()).append('\n');
+                audit.append("[MISSING COST AFTER RETRIES] RB").append(rebirth).append(" P").append(prestige)
+                        .append(" | ").append(entry.name()).append('\\n');
                 continue;
             }
 
@@ -239,43 +379,45 @@ public final class PrestigeInventoryScanner {
             pagePrices.add(data);
 
             audit.append("[PRICE] RB").append(rebirth).append(" P").append(prestige)
-                    .append(" = ").append(individualCost).append('\n');
+                    .append(" = ").append(individualCost);
+            if (cumulative != null) audit.append(" | TOTAL ").append(cumulative);
+            audit.append('\\n');
         }
 
-        // The Next arrow's label is a hover-only tooltip in this menu.
-        // If it is not present in the normal item tooltip, use the rightmost
-        // vanilla arrow in the menu as the Next control (the left arrow is Previous).
+        // If the tooltip label was not in the normal item tooltip, use the rightmost
+        // arrow as a candidate. It will still be physically hovered before clicking.
         if (nextSlot == null) {
-            for (int i = snapshot.size() - 1; i >= 0; i--) {
-                SlotSnapshot entry = snapshot.get(i);
+            for (int i = hoveredPageEntries.size() - 1; i >= 0; i--) {
+                SlotSnapshot entry = hoveredPageEntries.get(i);
                 ItemStack stack = entry.slot().getStack();
-                if (!stack.isEmpty() && stack.isOf(Items.ARROW)) {
+                if (stack != null && !stack.isEmpty() && stack.isOf(Items.ARROW)) {
                     nextSlot = entry.slot();
-                    audit.append("[NEXT CONTROL FALLBACK] rightmost arrow slot ")
+                    audit.append("[NEXT CONTROL CANDIDATE] rightmost arrow slot ")
                             .append(nextSlot.id).append('\\n');
                     break;
                 }
             }
         }
 
-        previousPageFingerprint = fingerprint;
         appendAudit(client, audit.toString());
         save(client);
         CompanionBridge.sendPage(pagesScanned, pagePrices, scannedItems, missingCostItemsThisPage, currentRebirth);
 
         if (nextSlot == null) {
-            status = "Scanned page " + pagesScanned + ". No Next control found; check audit before assuming complete.";
+            int missingExpected = 0;
+            for (Integer rebirth : PRICES.keySet()) missingExpected += getMissingPriceCount(rebirth);
             state = ScanState.FINISHED;
+            status = missingCostItemsThisPage > 0
+                    ? "Last page scanned, but " + missingCostItemsThisPage + " costs remain unreadable. Check audit."
+                    : "No Next button found. Scanned " + pagesScanned + " pages; verify the final catalogue.";
+            if (missingExpected > 0) status += " Expected prestige gaps: " + missingExpected + ".";
             return;
         }
 
-        status = "Page " + pagesScanned + ": " + pricesAddedThisPage
-                + " new/updated prices; " + missingCostItemsThisPage
-                + " unreadable costs. Moving to next page...";
-        state = ScanState.WAITING_FOR_NEXT_PAGE;
-        unchangedPageChecks = 0;
-        client.interactionManager.clickSlot(handler.syncId, nextSlot.id, 0,
-                SlotActionType.PICKUP, client.player);
+        pendingNextSlot = nextSlot;
+        nextHoverPhase = true;
+        cursorMovedForNext = false;
+        hoverWaitTicks = 0;
     }
 
     private static boolean isPrestigeMenu(List<SlotSnapshot> slots) {
@@ -436,6 +578,15 @@ public final class PrestigeInventoryScanner {
         stableChecks = 0;
         unchangedPageChecks = 0;
         SLOT_CACHE.clear();
+        activePageSnapshot = List.of();
+        hoveredPageEntries.clear();
+        activeSlotIndex = 0;
+        hoverWaitTicks = 0;
+        slotRetryCount = 0;
+        cursorMovedForSlot = false;
+        nextHoverPhase = false;
+        cursorMovedForNext = false;
+        pendingNextSlot = null;
     }
 
     public static int getPricesCollected() {
