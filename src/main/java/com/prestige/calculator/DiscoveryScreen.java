@@ -1,4 +1,3 @@
-
 package com.prestige.calculator;
 
 import net.minecraft.client.gui.DrawContext;
@@ -9,139 +8,68 @@ import net.minecraft.text.Text;
 import java.io.IOException;
 
 public final class DiscoveryScreen extends Screen {
-
-    private static final int PANEL_WIDTH = 440;
-    private static final int PANEL_HEIGHT = 290;
-
-    private String exportMessage = "Visit each rebirth tab to discover its prestige entries.";
+    private static final int WIDTH = 440;
+    private static final int HEIGHT = 260;
+    private String message = "Open /prestige. Price scanning starts automatically.";
 
     public DiscoveryScreen() {
-        super(Text.literal("Prestige Discovery"));
+        super(Text.literal("Prestige Price Scanner"));
     }
 
     @Override
     protected void init() {
-        int left = (this.width - PANEL_WIDTH) / 2;
-        int top = (this.height - PANEL_HEIGHT) / 2;
+        int left = (width - WIDTH) / 2;
+        int top = (height - HEIGHT) / 2;
 
-        this.addDrawableChild(ButtonWidget.builder(
-                Text.literal("Export Catalogue"),
-                button -> exportCatalogue()
-        ).dimensions(left + 16, top + PANEL_HEIGHT - 34, 130, 20).build());
+        addDrawableChild(ButtonWidget.builder(Text.literal("Export Prices"), button -> {
+            try {
+                message = "Saved: " + PrestigeInventoryScanner.exportPrices();
+            } catch (IOException exception) {
+                message = "Export failed: " + exception.getMessage();
+            }
+        }).dimensions(left + 16, top + HEIGHT - 36, 110, 20).build());
 
-        this.addDrawableChild(ButtonWidget.builder(
-                Text.literal("Back"),
-                button -> this.client.setScreen(new CalculatorScreen())
-        ).dimensions(left + PANEL_WIDTH - 106, top + PANEL_HEIGHT - 34, 90, 20).build());
-    }
-
-    private void exportCatalogue() {
-        try {
-            String path = PrestigeDiscoveryScanner.exportCatalogue();
-            exportMessage = "Exported: " + path;
-        } catch (IOException exception) {
-            exportMessage = "Export failed: " + exception.getMessage();
-        }
+        addDrawableChild(ButtonWidget.builder(Text.literal("Back"),
+                button -> client.setScreen(new CalculatorScreen()))
+                .dimensions(left + WIDTH - 96, top + HEIGHT - 36, 80, 20).build());
     }
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        context.fill(0, 0, this.width, this.height, 0x90000000);
+        context.fill(0, 0, width, height, 0x90000000);
+        int left = (width - WIDTH) / 2;
+        int top = (height - HEIGHT) / 2;
+        context.fill(left, top, left + WIDTH, top + HEIGHT, 0xEE171B25);
+        context.fill(left, top, left + WIDTH, top + 1, 0xFF65718A);
+        context.fill(left, top + HEIGHT - 1, left + WIDTH, top + HEIGHT, 0xFF65718A);
+        context.fill(left, top, left + 1, top + HEIGHT, 0xFF65718A);
+        context.fill(left + WIDTH - 1, top, left + WIDTH, top + HEIGHT, 0xFF65718A);
 
-        int left = (this.width - PANEL_WIDTH) / 2;
-        int top = (this.height - PANEL_HEIGHT) / 2;
-
-        context.fill(left, top, left + PANEL_WIDTH, top + PANEL_HEIGHT, 0xEE171B25);
-
-        context.fill(left, top, left + PANEL_WIDTH, top + 1, 0xFF65718A);
-        context.fill(left, top + PANEL_HEIGHT - 1, left + PANEL_WIDTH, top + PANEL_HEIGHT, 0xFF65718A);
-        context.fill(left, top, left + 1, top + PANEL_HEIGHT, 0xFF65718A);
-        context.fill(left + PANEL_WIDTH - 1, top, left + PANEL_WIDTH, top + PANEL_HEIGHT, 0xFF65718A);
-
-        context.drawCenteredTextWithShadow(
-                this.textRenderer,
-                this.title,
-                this.width / 2,
-                top + 12,
-                0xFFFFFFFF
-        );
-
-        context.drawTextWithShadow(
-                this.textRenderer,
-                Text.literal("Status: " + PrestigeDiscoveryScanner.getStatus()),
-                left + 16,
-                top + 42,
-                0xFFD8DEE9
-        );
-
-        context.drawTextWithShadow(
-                this.textRenderer,
-                Text.literal("Items scanned in current menu: " + PrestigeDiscoveryScanner.getScannedItems()),
-                left + 16,
-                top + 62,
-                0xFFD8DEE9
-        );
-
-        context.drawTextWithShadow(
-                this.textRenderer,
-                Text.literal("Rebirths discovered: " + PrestigeDiscoveryScanner.getDiscoveredRebirthCount()),
-                left + 16,
-                top + 82,
-                0xFFFFFFFF
-        );
-
-        context.drawTextWithShadow(
-                this.textRenderer,
-                Text.literal("Prestige entries discovered: " + PrestigeDiscoveryScanner.getDiscoveredPrestigeCount()),
-                left + 16,
-                top + 102,
-                0xFFFFFFFF
-        );
-
-        context.drawTextWithShadow(
-                this.textRenderer,
-                Text.literal("Recently discovered:"),
-                left + 16,
-                top + 130,
-                0xFFFFD479
-        );
-
-        int y = top + 150;
-
-        for (String entry : PrestigeDiscoveryScanner.getRecentDiscoveries()) {
-            context.drawTextWithShadow(
-                    this.textRenderer,
-                    Text.literal(entry),
-                    left + 16,
-                    y,
-                    0xFFD8DEE9
-            );
-
-            y += 14;
-
-            if (y > top + PANEL_HEIGHT - 58) {
-                break;
-            }
-        }
-
-        context.drawTextWithShadow(
-                this.textRenderer,
-                Text.literal(exportMessage),
-                left + 16,
-                top + PANEL_HEIGHT - 52,
-                0xFF9FB3D9
-        );
-
+        context.drawCenteredTextWithShadow(textRenderer, title, width / 2, top + 12, 0xFFFFFFFF);
+        context.drawTextWithShadow(textRenderer,
+                Text.literal("Status: " + PrestigeInventoryScanner.getStatus()),
+                left + 16, top + 48, 0xFFD8DEE9);
+        context.drawTextWithShadow(textRenderer,
+                Text.literal("Prices collected: " + PrestigeInventoryScanner.getPricesCollected()),
+                left + 16, top + 72, 0xFFFFFFFF);
+        context.drawTextWithShadow(textRenderer,
+                Text.literal("Pages scanned: " + PrestigeInventoryScanner.getPagesScanned()),
+                left + 16, top + 94, 0xFFD8DEE9);
+        context.drawTextWithShadow(textRenderer,
+                Text.literal("Items scanned on page: " + PrestigeInventoryScanner.getScannedItems()),
+                left + 16, top + 116, 0xFFD8DEE9);
+        context.drawTextWithShadow(textRenderer,
+                Text.literal("Prestige entries without readable Cost on page: "
+                        + PrestigeInventoryScanner.getMissingCostItemsThisPage()),
+                left + 16, top + 138, 0xFFFFD479);
+        context.drawTextWithShadow(textRenderer,
+                Text.literal("Prices are saved automatically to prestige_prices.json"),
+                left + 16, top + 168, 0xFF9FB3D9);
+        context.drawTextWithShadow(textRenderer, Text.literal(message),
+                left + 16, top + 190, 0xFF9FB3D9);
         super.render(context, mouseX, mouseY, delta);
     }
 
-    @Override
-    public boolean shouldCloseOnEsc() {
-        return true;
-    }
-
-    @Override
-    public boolean shouldPause() {
-        return false;
-    }
+    @Override public boolean shouldCloseOnEsc() { return true; }
+    @Override public boolean shouldPause() { return false; }
 }
