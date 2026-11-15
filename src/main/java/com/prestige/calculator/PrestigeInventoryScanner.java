@@ -376,14 +376,23 @@ public final class PrestigeInventoryScanner {
         if (dataLoaded) return;
         dataLoaded = true;
         Path file = client.runDirectory.toPath().resolve(PRICE_FILE);
-        if (!Files.exists(file)) {
-            status = "Ready. Open /prestige to start scanning.";
-            return;
-        }
+        boolean usingBundledCatalogue = !Files.exists(file);
+        String jsonText;
 
         try {
-            JsonObject root = JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8))
-                    .getAsJsonObject();
+            if (!usingBundledCatalogue) {
+                jsonText = Files.readString(file, StandardCharsets.UTF_8);
+            } else {
+                try (var bundled = PrestigeInventoryScanner.class.getResourceAsStream("/prestige_prices.json")) {
+                    if (bundled == null) {
+                        status = "No local or bundled price catalogue found. Ready to scan.";
+                        return;
+                    }
+                    jsonText = new String(bundled.readAllBytes(), StandardCharsets.UTF_8);
+                }
+            }
+
+            JsonObject root = JsonParser.parseString(jsonText).getAsJsonObject();
             JsonArray prices = root.has("prices") && root.get("prices").isJsonArray()
                     ? root.getAsJsonArray("prices") : new JsonArray();
 
@@ -404,7 +413,12 @@ public final class PrestigeInventoryScanner {
             }
 
             if (root.has("pagesScanned")) pagesScanned = Math.max(0, root.get("pagesScanned").getAsInt());
-            status = "Loaded " + loaded + " saved prices. Ready to scan.";
+            if (usingBundledCatalogue) {
+                save(client);
+                status = "Loaded " + loaded + " bundled prices. A local editable copy is being created.";
+            } else {
+                status = "Loaded " + loaded + " saved prices. Ready to scan.";
+            }
         } catch (Exception exception) {
             status = "Could not load saved prices: " + exception.getMessage();
         }
