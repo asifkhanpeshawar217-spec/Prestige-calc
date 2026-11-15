@@ -8,12 +8,12 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.registry.Registries;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.text.Text;
 
 import java.io.IOException;
-import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
@@ -21,7 +21,6 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -80,7 +79,17 @@ public final class PrestigeInventoryScanner {
     private static String candidateFingerprint = "";
     private static long saveGeneration;
 
+    // Hover scanning deliberately advances one visible slot at a time.
+    private static List<SlotSnapshot> activePageSnapshot = List.of();
+    private static List<SlotSnapshot> activePageAllSlots = List.of();
+    private static final List<SlotSnapshot> scannedGlassEntries = new ArrayList<>();
+    private static String activePageFingerprint = "";
+
     private PrestigeInventoryScanner() {}
+
+    public static void initialize() {
+        loadExistingPrices(MinecraftClient.getInstance());
+    }
 
     public static void scan() {
         MinecraftClient client = MinecraftClient.getInstance();
@@ -109,6 +118,11 @@ public final class PrestigeInventoryScanner {
         }
 
         if (state == ScanState.FINISHED) return;
+
+        if (state == ScanState.SCANNING_PAGE) {
+            advanceDirectScan(client, handler);
+            return;
+        }
 
         String fingerprint = fingerprint(snapshot);
 
@@ -185,20 +199,49 @@ public final class PrestigeInventoryScanner {
         scannedItems = 0;
         pricesAddedThisPage = 0;
         missingCostItemsThisPage = 0;
+        activePageAllSlots = new ArrayList<>(snapshot);
+        activePageSnapshot = snapshot.stream()
+                .filter(entry -> isGlassItem(entry.slot().getStack()))
+                .toList();
+        scannedGlassEntries.clear();
+        activePageFingerprint = fingerprint;
+        status = "Page " + pagesScanned + ": scanning " + activePageSnapshot.size() + " glass slots...";
+        state = ScanState.SCANNING_PAGE;
+    }
+
+    /**
+     * Reads tooltip/lore already stored on each glass ItemStack.
+     * It never moves or simulates the mouse cursor.
+     */
+    private static void advanceDirectScan(MinecraftClient client, net.minecraft.screen.ScreenHandler handler) {
+        scannedGlassEntries.clear();
+        scannedItems = 0;
+        for (SlotSnapshot original : activePageSnapshot) {
+            Slot slot = original.slot();
+            ItemStack stack = slot.getStack();
+            if (stack == null || stack.isEmpty()) continue;
+            String name = stack.getName().getString();
+            List<String> lines = getLines(stack);
+            scannedGlassEntries.add(new SlotSnapshot(slot, name, List.copyOf(lines)));
+            scannedItems++;
+        }
+        status = "Page " + pagesScanned + ": read " + scannedItems + " glass slots without moving the cursor.";
+        finishDirectPage(client, handler);
+    }
+
+    private static void finishDirectPage(MinecraftClient client, net.minecraft.screen.ScreenHandler handler) {
         Slot nextSlot = null;
         List<PriceData> pagePrices = new ArrayList<>();
         StringBuilder audit = new StringBuilder();
         audit.append("\n========== PRICE PAGE ").append(pagesScanned)
-                .append(" | RB CONTEXT ").append(currentRebirth).append(" ==========\n");
+                .append(" | RB CONTEXT ").append(currentRebirth).append(" | DIRECT ITEM DATA ==========").append('\n');
 
-        for (SlotSnapshot entry : snapshot) {
-            Slot slot = entry.slot();
+        for (SlotSnapshot entry : scannedGlassEntries) {
             if (entry.lines().isEmpty()) continue;
-            scannedItems++;
 
             if (hasNextTooltip(entry.lines())) {
-                nextSlot = slot;
-                audit.append("[NEXT CONTROL] slot ").append(slot.id).append('\n');
+                nextSlot = entry.slot();
+                audit.append("[NEXT CONTROL] slot ").append(nextSlot.id).append('\n');
             }
 
             String joined = String.join(" | ", entry.lines());
@@ -239,43 +282,53 @@ public final class PrestigeInventoryScanner {
             pagePrices.add(data);
 
             audit.append("[PRICE] RB").append(rebirth).append(" P").append(prestige)
-                    .append(" = ").append(individualCost).append('\n');
+                    .append(" = ").append(individualCost);
+            if (cumulative != null) audit.append(" | TOTAL ").append(cumulative);
+            audit.append('\n');
         }
 
-        // The Next arrow's label is a hover-only tooltip in this menu.
-        // If it is not present in the normal item tooltip, use the rightmost
-        // vanilla arrow in the menu as the Next control (the left arrow is Previous).
+        // Navigation controls may be non-glass items; they are not price entries.
         if (nextSlot == null) {
-            for (int i = snapshot.size() - 1; i >= 0; i--) {
-                SlotSnapshot entry = snapshot.get(i);
+            for (int i = activePageAllSlots.size() - 1; i >= 0; i--) {
+                SlotSnapshot entry = activePageAllSlots.get(i);
                 ItemStack stack = entry.slot().getStack();
-                if (!stack.isEmpty() && stack.isOf(Items.ARROW)) {
+                if (stack != null && !stack.isEmpty() && stack.isOf(Items.ARROW)) {
                     nextSlot = entry.slot();
-                    audit.append("[NEXT CONTROL FALLBACK] rightmost arrow slot ")
-                            .append(nextSlot.id).append('\\n');
+                    audit.append("[NEXT CONTROL CANDIDATE] rightmost arrow slot ")
+                            .append(nextSlot.id).append('\n');
                     break;
                 }
             }
         }
 
-        previousPageFingerprint = fingerprint;
         appendAudit(client, audit.toString());
         save(client);
         CompanionBridge.sendPage(pagesScanned, pagePrices, scannedItems, missingCostItemsThisPage, currentRebirth);
 
         if (nextSlot == null) {
-            status = "Scanned page " + pagesScanned + ". No Next control found; check audit before assuming complete.";
+            int missingExpected = 0;
+            for (Integer rebirth : PRICES.keySet()) missingExpected += getMissingPriceCount(rebirth);
             state = ScanState.FINISHED;
+            status = missingCostItemsThisPage > 0
+                    ? "Last page scanned, but " + missingCostItemsThisPage + " costs remain unreadable. Check audit."
+                    : "No Next button found. Scanned " + pagesScanned + " pages; verify the final catalogue.";
+            if (missingExpected > 0) status += " Expected prestige gaps: " + missingExpected + ".";
             return;
         }
 
-        status = "Page " + pagesScanned + ": " + pricesAddedThisPage
-                + " new/updated prices; " + missingCostItemsThisPage
-                + " unreadable costs. Moving to next page...";
+        // Use Minecraft's slot action directly; no cursor positioning is needed.
+        previousPageFingerprint = activePageFingerprint;
         state = ScanState.WAITING_FOR_NEXT_PAGE;
         unchangedPageChecks = 0;
+        status = "Page " + pagesScanned + " scanned. Opening the next page...";
         client.interactionManager.clickSlot(handler.syncId, nextSlot.id, 0,
                 SlotActionType.PICKUP, client.player);
+    }
+
+    private static boolean isGlassItem(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return false;
+        // Includes normal/stained glass and glass panes.
+        return Registries.ITEM.getId(stack.getItem()).getPath().contains("glass");
     }
 
     private static boolean isPrestigeMenu(List<SlotSnapshot> slots) {
@@ -327,14 +380,44 @@ public final class PrestigeInventoryScanner {
         if (dataLoaded) return;
         dataLoaded = true;
         Path file = client.runDirectory.toPath().resolve(PRICE_FILE);
-        if (!Files.exists(file)) {
-            status = "Ready. Open /prestige to start scanning.";
+
+        if (Files.exists(file)) {
+            try {
+                loadPricesFromJson(client, Files.readString(file, StandardCharsets.UTF_8), false);
+            } catch (Exception exception) {
+                status = "Could not load saved prices: " + exception.getMessage();
+            }
             return;
         }
 
+        status = "Downloading the 45,531 available catalogue prices...";
+        FILE_WORKER.execute(() -> {
+            try {
+                java.net.http.HttpClient http = java.net.http.HttpClient.newBuilder()
+                        .connectTimeout(java.time.Duration.ofSeconds(10))
+                        .build();
+                java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                        .uri(java.net.URI.create("https://raw.githubusercontent.com/asifkhanpeshawar217-spec/Prestige-calc/main/prestige_prices.json"))
+                        .timeout(java.time.Duration.ofSeconds(30))
+                        .header("User-Agent", "Prestige-Calculator-Mod")
+                        .GET()
+                        .build();
+                java.net.http.HttpResponse<String> response = http.send(
+                        request, java.net.http.HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+                if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                    throw new IOException("HTTP " + response.statusCode());
+                }
+                client.execute(() -> loadPricesFromJson(client, response.body(), true));
+            } catch (Exception exception) {
+                client.execute(() -> status = "Could not download the price catalogue: " + exception.getMessage()
+                        + ". Scanner can still collect prices when you open /prestige.");
+            }
+        });
+    }
+
+    private static void loadPricesFromJson(MinecraftClient client, String jsonText, boolean downloaded) {
         try {
-            JsonObject root = JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8))
-                    .getAsJsonObject();
+            JsonObject root = JsonParser.parseString(jsonText).getAsJsonObject();
             JsonArray prices = root.has("prices") && root.get("prices").isJsonArray()
                     ? root.getAsJsonArray("prices") : new JsonArray();
 
@@ -349,15 +432,22 @@ public final class PrestigeInventoryScanner {
                 String cumulative = item.has("cumulativeSpent") && !item.get("cumulativeSpent").isJsonNull()
                         ? item.get("cumulativeSpent").getAsString() : null;
                 if (rebirth < 0 || prestige < 0 || cost.isBlank()) continue;
+
                 PRICES.computeIfAbsent(rebirth, ignored -> new TreeMap<>())
                         .put(prestige, new PriceData(rebirth, prestige, cost, cumulative));
                 loaded++;
             }
 
-            if (root.has("pagesScanned")) pagesScanned = Math.max(0, root.get("pagesScanned").getAsInt());
-            status = "Loaded " + loaded + " saved prices. Ready to scan.";
+            if (root.has("pagesScanned")) pagesScanned = Math.max(pagesScanned, root.get("pagesScanned").getAsInt());
+
+            if (downloaded) {
+                save(client);
+                status = "Loaded " + loaded + " online catalogue prices. Local copy is being saved.";
+            } else {
+                status = "Loaded " + loaded + " saved prices. Ready to scan.";
+            }
         } catch (Exception exception) {
-            status = "Could not load saved prices: " + exception.getMessage();
+            status = "Could not read the price catalogue: " + exception.getMessage();
         }
     }
 
@@ -436,6 +526,9 @@ public final class PrestigeInventoryScanner {
         stableChecks = 0;
         unchangedPageChecks = 0;
         SLOT_CACHE.clear();
+        activePageSnapshot = List.of();
+        activePageAllSlots = List.of();
+        scannedGlassEntries.clear();
     }
 
     public static int getPricesCollected() {

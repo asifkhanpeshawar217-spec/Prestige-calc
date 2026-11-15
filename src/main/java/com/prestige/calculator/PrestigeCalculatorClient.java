@@ -22,6 +22,8 @@ public class PrestigeCalculatorClient implements ClientModInitializer {
                 )
         );
 
+        PrestigeInventoryScanner.initialize();
+
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (openCalculatorKey.wasPressed()) {
                 if (client.currentScreen == null) {
