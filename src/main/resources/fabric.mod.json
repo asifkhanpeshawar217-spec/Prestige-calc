@@ -6,6 +6,9 @@
   "description": "A client-side calculator for tracking prestige costs and progress.",
   "authors": ["You"],
   "environment": "client",
+  "mixins": [
+    "prestige_calculator.mixins.json"
+  ],
   "entrypoints": {
     "client": [
       "com.prestige.calculator.PrestigeCalculatorClient"
