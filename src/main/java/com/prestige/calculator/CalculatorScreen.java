@@ -1,4 +1,3 @@
-
 package com.prestige.calculator;
 
 import net.minecraft.client.gui.DrawContext;
@@ -8,24 +7,20 @@ import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
 
 import java.math.BigDecimal;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.ArrayList;
+import java.util.List;
 
 public final class CalculatorScreen extends Screen {
-
-    private static final int PANEL_WIDTH = 440;
-    private static final int PANEL_HEIGHT = 280;
+    private static final int PANEL_WIDTH = 460;
+    private static final int PANEL_HEIGHT = 270;
 
     private TextFieldWidget rebirthField;
     private TextFieldWidget startField;
     private TextFieldWidget targetField;
 
-    private String result = "Enter your prestige range and calculate.";
-    private String missingResult = "";
-    private boolean calculationDone = false;
-
-    private static final Pattern COST_PATTERN =
-            Pattern.compile("(?i)\\$?([\\d,.]+)\\s*(qt|q|t)");
+    private String result = "Enter a rebirth and prestige range, then calculate.";
+    private String detail = "";
+    private boolean calculationDone;
 
     public CalculatorScreen() {
         super(Text.literal("Prestige Calculator"));
@@ -33,51 +28,29 @@ public final class CalculatorScreen extends Screen {
 
     @Override
     protected void init() {
-        int left = (this.width - PANEL_WIDTH) / 2;
-        int top = (this.height - PANEL_HEIGHT) / 2;
+        int left = (width - PANEL_WIDTH) / 2;
+        int top = (height - PANEL_HEIGHT) / 2;
 
-        rebirthField = new TextFieldWidget(
-                this.textRenderer, left + 16, top + 82, 120, 20,
-                Text.literal("Rebirth")
-        );
-
-        startField = new TextFieldWidget(
-                this.textRenderer, left + 160, top + 82, 120, 20,
-                Text.literal("Starting prestige")
-        );
-
-        targetField = new TextFieldWidget(
-                this.textRenderer, left + 304, top + 82, 120, 20,
-                Text.literal("Target prestige")
-        );
+        rebirthField = new TextFieldWidget(textRenderer, left + 16, top + 91, 120, 20,
+                Text.literal("Rebirth"));
+        startField = new TextFieldWidget(textRenderer, left + 170, top + 91, 120, 20,
+                Text.literal("Starting prestige"));
+        targetField = new TextFieldWidget(textRenderer, left + 324, top + 91, 120, 20,
+                Text.literal("Target prestige"));
 
         rebirthField.setMaxLength(7);
         startField.setMaxLength(9);
         targetField.setMaxLength(9);
 
-        this.addDrawableChild(rebirthField);
-        this.addDrawableChild(startField);
-        this.addDrawableChild(targetField);
+        addDrawableChild(rebirthField);
+        addDrawableChild(startField);
+        addDrawableChild(targetField);
 
-        this.addDrawableChild(ButtonWidget.builder(
-                Text.literal("Calculate"),
-                button -> calculate()
-        ).dimensions(left + 150, top + 120, 140, 24).build());
+        addDrawableChild(ButtonWidget.builder(Text.literal("Calculate"), button -> calculate())
+                .dimensions(left + 160, top + 132, 140, 24).build());
 
-        this.addDrawableChild(ButtonWidget.builder(
-                Text.literal("Settings"),
-                button -> this.client.setScreen(new SettingsScreen(this))
-        ).dimensions(left + 16, top + PANEL_HEIGHT - 34, 90, 20).build());
-
-        this.addDrawableChild(ButtonWidget.builder(
-                Text.literal("Price Scan"),
-                button -> this.client.setScreen(new DiscoveryScreen())
-        ).dimensions(left + 120, top + PANEL_HEIGHT - 34, 100, 20).build());
-
-        this.addDrawableChild(ButtonWidget.builder(
-                Text.literal("Close"),
-                button -> this.close()
-        ).dimensions(left + PANEL_WIDTH - 106, top + PANEL_HEIGHT - 34, 90, 20).build());
+        addDrawableChild(ButtonWidget.builder(Text.literal("Close"), button -> close())
+                .dimensions(left + PANEL_WIDTH - 96, top + PANEL_HEIGHT - 32, 80, 20).build());
     }
 
     private void calculate() {
@@ -90,84 +63,57 @@ public final class CalculatorScreen extends Screen {
                 showError("Values cannot be negative.");
                 return;
             }
-
             if (target < start) {
-                showError("Target must be higher than starting prestige.");
+                showError("Target prestige must be at least the starting prestige.");
                 return;
             }
-
             if (target == start) {
-                result = "Total cost: $0";
-                missingResult = "No upgrades required.";
+                result = "Total cost: 0T";
+                detail = "No upgrades required.";
+                calculationDone = true;
+                return;
+            }
+            if (PriceCatalogue.getPriceCount() == 0) {
+                result = "Price catalogue is not loaded yet.";
+                detail = PriceCatalogue.getStatus();
                 calculationDone = true;
                 return;
             }
 
-            BigDecimal total = BigDecimal.ZERO;
-            int missing = 0;
+            BigDecimal knownTotal = BigDecimal.ZERO;
+            List<Integer> missingLevels = new ArrayList<>();
 
             for (int level = start + 1; level <= target; level++) {
-                PrestigeInventoryScanner.PriceData data =
-                        PrestigeInventoryScanner.getPrice(rebirth, level);
+                // Prestige 1 is always free and is intentionally not in the price file.
+                if (level == 1) continue;
 
-                if (data == null) {
-                    missing++;
-                    continue;
-                }
-
-                BigDecimal price = parseCost(data.individualCost());
-
+                BigDecimal price = PriceCatalogue.getPrice(rebirth, level);
                 if (price == null) {
-                    missing++;
-                    continue;
+                    missingLevels.add(level);
+                } else {
+                    knownTotal = knownTotal.add(price);
                 }
-
-                total = total.add(price);
             }
 
-            if (missing > 0) {
-                result = "Calculation incomplete";
-                missingResult = missing + " missing price(s). Scan the relevant rebirth tab.";
-                calculationDone = true;
-                return;
+            if (missingLevels.isEmpty()) {
+                result = "Total cost: " + formatAmount(knownTotal);
+                detail = "All " + (target - start) + " requested prestige levels are covered.";
+            } else {
+                result = "Known subtotal: " + formatAmount(knownTotal);
+                StringBuilder missing = new StringBuilder("Missing ");
+                missing.append(missingLevels.size()).append(" price(s): ");
+                int shown = Math.min(8, missingLevels.size());
+                for (int i = 0; i < shown; i++) {
+                    if (i > 0) missing.append(", ");
+                    missing.append("P").append(missingLevels.get(i));
+                }
+                if (missingLevels.size() > shown) missing.append(", ...");
+                detail = missing.toString();
             }
 
-            result = "Total cost: $" + formatAmount(total);
-            missingResult = "All " + (target - start) + " upgrade prices found.";
             calculationDone = true;
-
         } catch (NumberFormatException exception) {
-            showError("Enter valid numbers in all three fields.");
-        }
-    }
-
-    private BigDecimal parseCost(String value) {
-        if (value == null) {
-            return null;
-        }
-
-        Matcher matcher = COST_PATTERN.matcher(value.trim());
-
-        if (!matcher.find()) {
-            return null;
-        }
-
-        try {
-            BigDecimal amount = new BigDecimal(
-                    matcher.group(1).replace(",", "")
-            );
-
-            String unit = matcher.group(2).toLowerCase();
-
-            return switch (unit) {
-                case "t" -> amount;
-                case "q" -> amount.multiply(BigDecimal.valueOf(1_000));
-                case "qt" -> amount.multiply(BigDecimal.valueOf(1_000_000));
-                default -> null;
-            };
-
-        } catch (NumberFormatException exception) {
-            return null;
+            showError("Enter valid whole numbers in all three fields.");
         }
     }
 
@@ -176,10 +122,10 @@ public final class CalculatorScreen extends Screen {
         String unit;
 
         if (amount.compareTo(BigDecimal.valueOf(1_000_000)) >= 0) {
-            value = amount.divide(BigDecimal.valueOf(1_000_000));
+            value = amount.divide(BigDecimal.valueOf(1_000_000), 6, java.math.RoundingMode.HALF_UP);
             unit = "qt";
         } else if (amount.compareTo(BigDecimal.valueOf(1_000)) >= 0) {
-            value = amount.divide(BigDecimal.valueOf(1_000));
+            value = amount.divide(BigDecimal.valueOf(1_000), 6, java.math.RoundingMode.HALF_UP);
             unit = "q";
         } else {
             value = amount;
@@ -191,75 +137,49 @@ public final class CalculatorScreen extends Screen {
 
     private void showError(String message) {
         result = message;
-        missingResult = "";
+        detail = "";
         calculationDone = true;
     }
 
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        context.fill(0, 0, this.width, this.height, 0x90000000);
+        context.fill(0, 0, width, height, 0x90000000);
 
-        int left = (this.width - PANEL_WIDTH) / 2;
-        int top = (this.height - PANEL_HEIGHT) / 2;
+        int left = (width - PANEL_WIDTH) / 2;
+        int top = (height - PANEL_HEIGHT) / 2;
 
         context.fill(left, top, left + PANEL_WIDTH, top + PANEL_HEIGHT, 0xEE171B25);
-
         context.fill(left, top, left + PANEL_WIDTH, top + 1, 0xFF65718A);
         context.fill(left, top + PANEL_HEIGHT - 1, left + PANEL_WIDTH, top + PANEL_HEIGHT, 0xFF65718A);
         context.fill(left, top, left + 1, top + PANEL_HEIGHT, 0xFF65718A);
         context.fill(left + PANEL_WIDTH - 1, top, left + PANEL_WIDTH, top + PANEL_HEIGHT, 0xFF65718A);
 
-        context.drawCenteredTextWithShadow(
-                this.textRenderer, this.title,
-                this.width / 2, top + 12, 0xFFFFFFFF
-        );
+        context.drawCenteredTextWithShadow(textRenderer, title, width / 2, top + 12, 0xFFFFFFFF);
+        context.drawTextWithShadow(textRenderer,
+                Text.literal("Catalogue: " + PriceCatalogue.getStatus()),
+                left + 16, top + 43, 0xFFB8C7E0);
+        context.drawTextWithShadow(textRenderer,
+                Text.literal("Available prices: " + PriceCatalogue.getPriceCount()
+                        + " across " + PriceCatalogue.getRebirthCount() + " rebirths"),
+                left + 16, top + 62, 0xFFB8C7E0);
 
-        context.drawTextWithShadow(
-                this.textRenderer,
-                Text.literal("Prices collected: " + PrestigeInventoryScanner.getPricesCollected()),
-                left + 16, top + 42, 0xFFB8C7E0
-        );
-
-        context.drawTextWithShadow(
-                this.textRenderer,
-                Text.literal("Scanner: " + PrestigeInventoryScanner.getStatus()),
-                left + 16, top + 57, 0xFFB8C7E0
-        );
-
-        context.drawTextWithShadow(
-                this.textRenderer, Text.literal("Rebirth"),
-                left + 16, top + 67, 0xFFFFFFFF
-        );
-
-        context.drawTextWithShadow(
-                this.textRenderer, Text.literal("Starting prestige"),
-                left + 160, top + 67, 0xFFFFFFFF
-        );
-
-        context.drawTextWithShadow(
-                this.textRenderer, Text.literal("Target prestige"),
-                left + 304, top + 67, 0xFFFFFFFF
-        );
+        context.drawTextWithShadow(textRenderer, Text.literal("Rebirth"), left + 16, top + 76, 0xFFFFFFFF);
+        context.drawTextWithShadow(textRenderer, Text.literal("Starting prestige"), left + 170, top + 76, 0xFFFFFFFF);
+        context.drawTextWithShadow(textRenderer, Text.literal("Target prestige"), left + 324, top + 76, 0xFFFFFFFF);
 
         if (calculationDone) {
-            context.drawTextWithShadow(
-                    this.textRenderer,
-                    Text.literal(result),
-                    left + 16, top + 165, 0xFFFFD479
-            );
-
-            context.drawTextWithShadow(
-                    this.textRenderer,
-                    Text.literal(missingResult),
-                    left + 16, top + 185, 0xFFD8DEE9
-            );
+            context.drawTextWithShadow(textRenderer, Text.literal(result),
+                    left + 16, top + 178, 0xFFFFD479);
+            context.drawTextWithShadow(textRenderer, Text.literal(detail),
+                    left + 16, top + 199, 0xFFD8DEE9);
         } else {
-            context.drawTextWithShadow(
-                    this.textRenderer,
-                    Text.literal(result),
-                    left + 16, top + 165, 0xFFD8DEE9
-            );
+            context.drawTextWithShadow(textRenderer, Text.literal(result),
+                    left + 16, top + 178, 0xFFD8DEE9);
         }
+
+        context.drawTextWithShadow(textRenderer,
+                Text.literal("P1 is free. Only recorded prices are used; missing prices are never estimated."),
+                left + 16, top + PANEL_HEIGHT - 28, 0xFF9FB3D9);
 
         super.render(context, mouseX, mouseY, delta);
     }
@@ -276,8 +196,6 @@ public final class CalculatorScreen extends Screen {
 
     @Override
     public void close() {
-        if (this.client != null) {
-            this.client.setScreen(null);
-        }
+        if (client != null) client.setScreen(null);
     }
 }
