@@ -235,6 +235,7 @@ public final class PrestigeInventoryScanner {
             PriceData previous = PRICES.computeIfAbsent(rebirth, ignored -> new TreeMap<>())
                     .put(prestige, data);
             if (previous == null || !previous.equals(data)) pricesAddedThisPage++;
+            pagePrices.add(data);
 
             audit.append("[PRICE] RB").append(rebirth).append(" P").append(prestige)
                     .append(" = ").append(individualCost).append('\n');
