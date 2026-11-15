@@ -1,6 +1,6 @@
 {
   "required": true,
-  "package": "com.prestige.calculator",
+  "package": "com.prestige.calculator.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
     "HandledScreenAccessor"
