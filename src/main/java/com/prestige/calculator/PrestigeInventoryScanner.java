@@ -10,6 +10,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.registry.Registries;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.text.Text;
@@ -87,6 +88,7 @@ public final class PrestigeInventoryScanner {
     private static final int HOVER_WAIT_TICKS = 8;
     private static final int MAX_SLOT_RETRIES = 4;
     private static List<SlotSnapshot> activePageSnapshot = List.of();
+    private static List<SlotSnapshot> activePageAllSlots = List.of();
     private static final List<SlotSnapshot> hoveredPageEntries = new ArrayList<>();
     private static int activeSlotIndex;
     private static int hoverWaitTicks;
@@ -207,7 +209,10 @@ public final class PrestigeInventoryScanner {
         scannedItems = 0;
         pricesAddedThisPage = 0;
         missingCostItemsThisPage = 0;
-        activePageSnapshot = new ArrayList<>(snapshot);
+        activePageAllSlots = new ArrayList<>(snapshot);
+        activePageSnapshot = snapshot.stream()
+                .filter(entry -> isGlassItem(entry.slot().getStack()))
+                .toList();
         hoveredPageEntries.clear();
         activeSlotIndex = 0;
         hoverWaitTicks = 0;
@@ -217,7 +222,7 @@ public final class PrestigeInventoryScanner {
         cursorMovedForNext = false;
         pendingNextSlot = null;
         activePageFingerprint = fingerprint;
-        status = "Page " + pagesScanned + ": moving the mouse over each entry...";
+        status = "Page " + pagesScanned + ": scanning " + activePageSnapshot.size() + " glass slots...";
         state = ScanState.SCANNING_PAGE;
     }
 
@@ -386,11 +391,10 @@ public final class PrestigeInventoryScanner {
             audit.append('\n');
         }
 
-        // If the tooltip label was not in the normal item tooltip, use the rightmost
-        // arrow as a candidate. It will still be physically hovered before clicking.
+        // Navigation controls may be non-glass items; they are not price entries.
         if (nextSlot == null) {
-            for (int i = hoveredPageEntries.size() - 1; i >= 0; i--) {
-                SlotSnapshot entry = hoveredPageEntries.get(i);
+            for (int i = activePageAllSlots.size() - 1; i >= 0; i--) {
+                SlotSnapshot entry = activePageAllSlots.get(i);
                 ItemStack stack = entry.slot().getStack();
                 if (stack != null && !stack.isEmpty() && stack.isOf(Items.ARROW)) {
                     nextSlot = entry.slot();
@@ -420,6 +424,12 @@ public final class PrestigeInventoryScanner {
         nextHoverPhase = true;
         cursorMovedForNext = false;
         hoverWaitTicks = 0;
+    }
+
+    private static boolean isGlassItem(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return false;
+        // Includes normal/stained glass and glass panes.
+        return Registries.ITEM.getId(stack.getItem()).getPath().contains("glass");
     }
 
     private static boolean isPrestigeMenu(List<SlotSnapshot> slots) {
@@ -581,6 +591,7 @@ public final class PrestigeInventoryScanner {
         unchangedPageChecks = 0;
         SLOT_CACHE.clear();
         activePageSnapshot = List.of();
+        activePageAllSlots = List.of();
         hoveredPageEntries.clear();
         activeSlotIndex = 0;
         hoverWaitTicks = 0;
