@@ -1,4 +1,3 @@
-
 package com.prestige.calculator;
 
 import net.fabricmc.api.ClientModInitializer;
@@ -9,13 +8,11 @@ import net.minecraft.client.util.InputUtil;
 import org.lwjgl.glfw.GLFW;
 
 public class PrestigeCalculatorClient implements ClientModInitializer {
-
     private static KeyBinding openCalculatorKey;
-    private static int scanTicks = 0;
+    private static int scanTicks;
 
     @Override
     public void onInitializeClient() {
-
         openCalculatorKey = KeyBindingHelper.registerKeyBinding(
                 new KeyBinding(
                         "key.prestige_calculator.open",
@@ -26,7 +23,6 @@ public class PrestigeCalculatorClient implements ClientModInitializer {
         );
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-
             while (openCalculatorKey.wasPressed()) {
                 if (client.currentScreen == null) {
                     client.setScreen(new CalculatorScreen());
@@ -35,13 +31,9 @@ public class PrestigeCalculatorClient implements ClientModInitializer {
                 }
             }
 
-            scanTicks++;
-
-            if (scanTicks >= 10) {
+            if (++scanTicks >= 10) {
                 scanTicks = 0;
-
-                // Stage 1 ONLY: discover prestige entries.
-                PrestigeDiscoveryScanner.scan();
+                PrestigeInventoryScanner.scan();
             }
         });
     }
