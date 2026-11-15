@@ -185,6 +185,7 @@ public final class PrestigeInventoryScanner {
         pricesAddedThisPage = 0;
         missingCostItemsThisPage = 0;
         Slot nextSlot = null;
+        List<PriceData> pagePrices = new ArrayList<>();
         StringBuilder audit = new StringBuilder();
         audit.append("\n========== PRICE PAGE ").append(pagesScanned)
                 .append(" | RB CONTEXT ").append(currentRebirth).append(" ==========\n");
@@ -242,6 +243,7 @@ public final class PrestigeInventoryScanner {
         previousPageFingerprint = fingerprint;
         appendAudit(client, audit.toString());
         save(client);
+        CompanionBridge.sendPage(pagesScanned, pagePrices, scannedItems, missingCostItemsThisPage, currentRebirth);
 
         if (nextSlot == null) {
             status = "Scanned page " + pagesScanned + ". No Next control found; check audit before assuming complete.";
