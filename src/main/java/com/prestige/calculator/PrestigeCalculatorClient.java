@@ -31,7 +31,9 @@ public class PrestigeCalculatorClient implements ClientModInitializer {
                 }
             }
 
-            if (++scanTicks >= 10) {
+            // Cached slot data makes frequent checks inexpensive and improves
+            // page-transition responsiveness without repeatedly building tooltips.
+            if (++scanTicks >= 2) {
                 scanTicks = 0;
                 PrestigeInventoryScanner.scan();
             }
