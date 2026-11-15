@@ -376,22 +376,43 @@ public final class PrestigeInventoryScanner {
         if (dataLoaded) return;
         dataLoaded = true;
         Path file = client.runDirectory.toPath().resolve(PRICE_FILE);
-        boolean usingBundledCatalogue = !Files.exists(file);
-        String jsonText;
 
-        try {
-            if (!usingBundledCatalogue) {
-                jsonText = Files.readString(file, StandardCharsets.UTF_8);
-            } else {
-                try (var bundled = PrestigeInventoryScanner.class.getResourceAsStream("/prestige_prices.json")) {
-                    if (bundled == null) {
-                        status = "No local or bundled price catalogue found. Ready to scan.";
-                        return;
-                    }
-                    jsonText = new String(bundled.readAllBytes(), StandardCharsets.UTF_8);
-                }
+        if (Files.exists(file)) {
+            try {
+                loadPricesFromJson(client, Files.readString(file, StandardCharsets.UTF_8), false);
+            } catch (Exception exception) {
+                status = "Could not load saved prices: " + exception.getMessage();
             }
+            return;
+        }
 
+        status = "Downloading the 45,531 available catalogue prices...";
+        FILE_WORKER.execute(() -> {
+            try {
+                java.net.http.HttpClient http = java.net.http.HttpClient.newBuilder()
+                        .connectTimeout(java.time.Duration.ofSeconds(10))
+                        .build();
+                java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                        .uri(java.net.URI.create("https://raw.githubusercontent.com/asifkhanpeshawar217-spec/Prestige-calc/main/prestige_prices.json"))
+                        .timeout(java.time.Duration.ofSeconds(30))
+                        .header("User-Agent", "Prestige-Calculator-Mod")
+                        .GET()
+                        .build();
+                java.net.http.HttpResponse<String> response = http.send(
+                        request, java.net.http.HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+                if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                    throw new IOException("HTTP " + response.statusCode());
+                }
+                client.execute(() -> loadPricesFromJson(client, response.body(), true));
+            } catch (Exception exception) {
+                client.execute(() -> status = "Could not download the price catalogue: " + exception.getMessage()
+                        + ". Scanner can still collect prices when you open /prestige.");
+            }
+        });
+    }
+
+    private static void loadPricesFromJson(MinecraftClient client, String jsonText, boolean downloaded) {
+        try {
             JsonObject root = JsonParser.parseString(jsonText).getAsJsonObject();
             JsonArray prices = root.has("prices") && root.get("prices").isJsonArray()
                     ? root.getAsJsonArray("prices") : new JsonArray();
@@ -407,20 +428,22 @@ public final class PrestigeInventoryScanner {
                 String cumulative = item.has("cumulativeSpent") && !item.get("cumulativeSpent").isJsonNull()
                         ? item.get("cumulativeSpent").getAsString() : null;
                 if (rebirth < 0 || prestige < 0 || cost.isBlank()) continue;
+
                 PRICES.computeIfAbsent(rebirth, ignored -> new TreeMap<>())
                         .put(prestige, new PriceData(rebirth, prestige, cost, cumulative));
                 loaded++;
             }
 
-            if (root.has("pagesScanned")) pagesScanned = Math.max(0, root.get("pagesScanned").getAsInt());
-            if (usingBundledCatalogue) {
+            if (root.has("pagesScanned")) pagesScanned = Math.max(pagesScanned, root.get("pagesScanned").getAsInt());
+
+            if (downloaded) {
                 save(client);
-                status = "Loaded " + loaded + " bundled prices. A local editable copy is being created.";
+                status = "Loaded " + loaded + " online catalogue prices. Local copy is being saved.";
             } else {
                 status = "Loaded " + loaded + " saved prices. Ready to scan.";
             }
         } catch (Exception exception) {
-            status = "Could not load saved prices: " + exception.getMessage();
+            status = "Could not read the price catalogue: " + exception.getMessage();
         }
     }
 
