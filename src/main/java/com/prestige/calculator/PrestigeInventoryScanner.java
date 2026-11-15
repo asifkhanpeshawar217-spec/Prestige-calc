@@ -87,6 +87,10 @@ public final class PrestigeInventoryScanner {
 
     private PrestigeInventoryScanner() {}
 
+    public static void initialize() {
+        loadExistingPrices(MinecraftClient.getInstance());
+    }
+
     public static void scan() {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player == null || !(client.currentScreen instanceof HandledScreen<?>)) {
